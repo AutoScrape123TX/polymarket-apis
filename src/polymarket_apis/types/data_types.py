@@ -172,7 +172,7 @@ class HolderResponse(BaseModel):
 
 class ValueResponse(BaseModel):
     # User identification
-    user: EthAddress = Field(alias="user")
+    user: EthAddress
 
     # Value information
     value: float
