@@ -6,6 +6,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from .common import EmptyString, EthAddress, Keccak256
 
 
+class AccountingSnapshotCSVs(BaseModel):
+    """Parsed contents of the accounting snapshot ZIP."""
+
+    positions_csv: str
+    equity_csv: str
+
 class GQLPosition(BaseModel):
     user: EthAddress
     token_id: str
@@ -72,6 +78,39 @@ class Position(BaseModel):
     event_slug: str = Field(alias="eventSlug")
     end_date: datetime = Field(alias="endDate")
     negative_risk: bool = Field(alias="negativeRisk")
+
+    @field_validator("end_date", mode="before")
+    def handle_empty_end_date(cls, v):
+        if v == "":
+            return datetime(2099, 12, 31, tzinfo=UTC)
+        return v
+
+class ClosedPosition(BaseModel):
+    # User identification
+    proxy_wallet: EthAddress = Field(alias="proxyWallet")
+
+    # Asset information
+    token_id: str = Field(alias="asset")
+    complementary_token_id: str = Field(alias="oppositeAsset")
+    condition_id: Keccak256 = Field(alias="conditionId")
+    outcome: str
+    complementary_outcome: str = Field(alias="oppositeOutcome")
+    outcome_index: int = Field(alias="outcomeIndex")
+
+    # Position details
+    avg_price: float = Field(alias="avgPrice")
+    current_price: float = Field(alias="curPrice")
+
+    # Financial metrics
+    total_bought: float = Field(alias="totalBought")
+    realized_pnl: float = Field(alias="realizedPnl")
+
+    # Event information
+    title: str
+    slug: str
+    icon: str
+    event_slug: str = Field(alias="eventSlug")
+    end_date: datetime = Field(alias="endDate")
 
     @field_validator("end_date", mode="before")
     def handle_empty_end_date(cls, v):
@@ -194,6 +233,26 @@ class UserMetric(User):
 class UserRank(User):
     amount: float
     rank: int
+
+class LeaderboardUser(BaseModel):
+    rank: int
+    proxy_wallet: EthAddress = Field(alias="proxyWallet")
+    username: str = Field(alias="userName")
+    x_username: str = Field(alias="xUsername")
+    verified_badge: bool = Field(alias="verifiedBadge")
+    vol: float
+    pnl: float
+    profile_image: str = Field(alias="profileImage")
+
+
+class BuilderLeaderboardUser(BaseModel):
+    date: Optional[datetime] = Field(None, alias="dt") # period end date
+    rank: int
+    builder: str
+    volume: float
+    active_users: int = Field(alias="activeUsers")
+    verified: float
+    builder_logo: str = Field(alias="builderLogo")
 
 
 class MarketValue(BaseModel):

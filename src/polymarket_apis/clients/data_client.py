@@ -1,4 +1,7 @@
+import io
+import zipfile
 from datetime import datetime
+from pathlib import Path
 from typing import Literal, Optional, Union
 from urllib.parse import urljoin
 
@@ -7,10 +10,14 @@ import httpx
 from ..clients.graphql_client import PolymarketGraphQLClient
 from ..types.common import EthAddress, TimeseriesPoint
 from ..types.data_types import (
+    AccountingSnapshotCSVs,
     Activity,
+    BuilderLeaderboardUser,
+    ClosedPosition,
     EventLiveVolume,
     GQLPosition,
     HolderResponse,
+    LeaderboardUser,
     MarketValue,
     Position,
     Trade,
@@ -36,13 +43,11 @@ class PolymarketDataClient:
         response.raise_for_status()
         return response.json()["data"]
 
-    def get_all_positions(
+    def get_all_positions_gql(
         self,
         user: EthAddress,
         size_threshold: float = 0.0,
     ):
-        # data-api /positions endpoint does not support fetching all positions without filters
-        # a workaround is to use the GraphQL positions subgraph directly
         query = f"""query {{
                   userBalances(where: {{
                   user: "{user.lower()}",
@@ -117,6 +122,19 @@ class PolymarketDataClient:
             params["sortBy"] = sort_by
         if sort_direction:
             params["sortDirection"] = sort_direction
+
+        response = self.client.get(self._build_url("/positions"), params=params)
+        response.raise_for_status()
+        return [Position(**pos) for pos in response.json()]
+
+    def get_all_positions(
+        self,
+        user: EthAddress,
+    ) -> list[Position]:
+        params: dict[str, str | int] = {
+            "user": user,
+            "sizeThreshold": 0
+        }
 
         response = self.client.get(self._build_url("/positions"), params=params)
         response.raise_for_status()
@@ -258,7 +276,7 @@ class PolymarketDataClient:
         self,
         user: EthAddress,
         condition_ids: Optional[Union[str, list[str]]] = None,
-    ) -> list[Position]:
+    ) -> list[ClosedPosition]:
         """Get all closed positions."""
         params = {"user": user}
         if isinstance(condition_ids, str):
@@ -268,7 +286,7 @@ class PolymarketDataClient:
 
         response = self.client.get(self._build_url("/closed-positions"), params=params)
         response.raise_for_status()
-        return [Position(**pos) for pos in response.json()]
+        return [ClosedPosition(**pos) for pos in response.json()]
 
     def get_total_markets_traded(
         self,
@@ -307,6 +325,66 @@ class PolymarketDataClient:
         response = self.client.get(self._build_url("/live-volume"), params=params)
         response.raise_for_status()
         return EventLiveVolume(**response.json()[0])
+
+    def get_accounting_snapshot_zip(self, user: EthAddress, save_to: Optional[str | Path] = None) -> bytes:
+        """Download the accounting snapshot ZIP (CSV bundle) as bytes."""
+        params = {"user": user}
+
+        response = self.client.get(self._build_url("/v1/accounting/snapshot"), params=params)
+        response.raise_for_status()
+        data = response.content
+
+        if save_to is not None:
+            Path(save_to).write_bytes(data)
+
+        return data
+    def get_accounting_snapshot_csvs(self, user: EthAddress) -> AccountingSnapshotCSVs:
+        """Get the accounting snapshot as a list of dicts (one per row)."""
+        raw = self.get_accounting_snapshot_zip(user)
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            positions_csv = zf.read("positions.csv").decode()
+            equity_csv = zf.read("equity.csv").decode()
+        return AccountingSnapshotCSVs(positions_csv=positions_csv, equity_csv=equity_csv)
+
+    def get_leaderboard_rankings(self,
+                                 address: Optional[EthAddress] = None,
+                                 username: Optional[str] = None,
+                                 category: Literal["OVERALL", "POLITICS", "SPORTS", "CRYPTO", "CULTURE", "MENTIONS", "WEATHER", "ECONOMICS", "TECH", "FINANCE"] = "OVERALL",
+                                 time_period: Literal["DAY", "WEEK", "MONTH", "ALL"] = "DAY",
+                                 order_by: Literal["PNL", "VOL"] = "PNL",
+                                 limit: int = 25, # 1 <= x <= 50
+                                 offset: int = 0, # 0 <= x <= 1000
+                                 ) -> list[LeaderboardUser]:
+        """Get the leaderboard rankings with optional filters and pagination."""
+        params: dict[str, str | int] = {
+            "category": category,
+            "timePeriod": time_period,
+            "orderBy": order_by,
+            "limit": limit,
+            "offset": offset,
+        }
+        if address:
+            params["user"] = address
+        if username:
+            params["username"] = username
+
+        response = self.client.get(self._build_url("/v1/leaderboard"), params=params)
+        response.raise_for_status()
+        return [LeaderboardUser(**user) for user in response.json()]
+
+    def get_builder_leaderboard_aggregated(self, time_period: Literal["DAY", "WEEK", "MONTH", "ALL"] = "DAY") -> list[BuilderLeaderboardUser]:
+        """Get the aggregated builder volume leaderboard rankings for a given time period."""
+        params = {"timePeriod": time_period}
+        response = self.client.get(self._build_url("/v1/builders/leaderboard"), params=params)
+        response.raise_for_status()
+        return [BuilderLeaderboardUser(**user) for user in response.json()]
+
+    def get_builder_leaderboard_timeseries(self, granularity: Literal["DAY", "WEEK", "MONTH", "ALL"] = "DAY") -> list[BuilderLeaderboardUser]:
+        """Get the builder volume leaderboard timeseries with a given granularity."""
+        params = {"timePeriod": granularity}
+        response = self.client.get(self._build_url("/v1/builders/volume"), params=params)
+        response.raise_for_status()
+        return response.json()
 
     # website endpoints
 

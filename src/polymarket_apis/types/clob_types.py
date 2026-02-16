@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal, Optional, TypeVar, Union
 
 from py_order_utils.model import SignedOrder
@@ -358,7 +358,7 @@ class OrderBookSummary(BaseModel):
         return str(int(ts.timestamp() * 1000))
 
 
-class AssetType(str, Enum):
+class AssetType(StrEnum):
     COLLATERAL = "COLLATERAL"
     CONDITIONAL = "CONDITIONAL"
 
@@ -369,7 +369,7 @@ class BalanceAllowanceParams(BaseModel):
     signature_type: int = -1
 
 
-class OrderType(str, Enum):
+class OrderType(StrEnum):
     GTC = "GTC"  # Good Till Cancelled
     GTD = "GTD"  # Good Till Date
     FOK = "FOK"  # Fill or Kill

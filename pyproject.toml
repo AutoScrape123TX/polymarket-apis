@@ -1,6 +1,6 @@
 [project]
 name = "polymarket-apis"
-version = "0.4.3"
+version = "0.4.4"
 description = "Unified Polymarket APIs with Pydantic data validation - Clob, Gamma, Data, Web3, Websockets, GraphQL clients."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -36,6 +36,11 @@ dev = [
     "mypy>=1.18.2",
     "types-python-dateutil>=2.9.0.20251008",
     "pdoc>=16.0.0",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+    "pytest-mock>=3.14.1",
+    "respx>=0.22.0",
+    "pytest-xdist>=3.8.0",
 ]
 
 [build-system]
@@ -56,6 +61,19 @@ python_version = "3.12"
 
 [tool.mypy]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "contract: deterministic mocked tests with no external network calls",
+    "prod_read: live read-only tests against production polymarket endpoints",
+    "auth_clob: authenticated clob tests that avoid state-changing operations",
+    "amoy_web3: tiny web3 state-changing tests on amoy only",
+    "amoy_gasless: optional gasless relay tests on amoy",
+    "websocket_live: live websocket smoke/invariant tests",
+]
 
 
 [tool.ruff]
@@ -148,6 +166,7 @@ lint.ignore = [
     "PLR2004",   # Pylint - magic-value-comparison
     "A001",      # Flake8-builtins - builtin-variable-shadowing
     "A002",      # Flake8-builtins - builtin-argument-shadowing
+    "FURB110"    # refurb - if-exp-instead-of-or-operator
 ]
 
 
